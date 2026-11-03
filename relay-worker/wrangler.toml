@@ -1,0 +1,10 @@
+name = "flightcheck-relay"
+main = "src/index.js"
+compatibility_date = "2026-10-01"
+
+[vars]
+# GitHub Pages のURL（https://ユーザー名.github.io）。末尾のスラッシュやリポジトリ名は付けない
+ALLOWED_ORIGIN = "https://kozo114.github.io"
+
+# ODPT_KEY は次のコマンドで登録する（ここには書かない）
+#   npx wrangler secret put ODPT_KEY
