@@ -17,29 +17,40 @@ assert.equal(demoRecords(1080, 1200, 'intl').length, 3);
 // ODPT取得：URL組み立て・エラー文・キャッシュ
 const store = new Map();
 globalThis.sessionStorage = { getItem: k => store.get(k) ?? null, setItem: (k, v) => store.set(k, v), removeItem: k => store.delete(k) };
-const calls = [];
+const calls = [], sent = [];
 let mode = 'ok';
-globalThis.fetch = async url => {
-  calls.push(url);
+globalThis.fetch = async (url, opts = {}) => {
+  calls.push(url); sent.push(opts.headers || {});
   if (mode === 'blocked') throw new TypeError('Failed to fetch');
   if (mode === 'bad') return new Response('', { status: 401 });
   return new Response(JSON.stringify(recs), { status: 200 });
 };
-const { fetchArrivals } = await import('../js/odpt.js');
+const { fetchArrivals, SHARED_RELAY, PASS_HEADER } = await import('../js/odpt.js');
 
-await assert.rejects(fetchArrivals({ scope: 'all' }), e => e.code === 'no_key');
-let r = await fetchArrivals({ scope: 'dom', key: 'abc' });
+await assert.rejects(fetchArrivals({}), e => e.code === 'no_key');
+let r = await fetchArrivals({ key: 'abc' });
 assert.equal(r.length, 11);
-assert.ok(calls[0].includes('odpt:operator=odpt.Operator:HND-JAT&acl:consumerKey=abc'));
-await fetchArrivals({ scope: 'dom', key: 'abc' });
+assert.equal(calls[0], 'https://api.odpt.org/api/v4/odpt:FlightInformationArrival?odpt:arrivalAirport=odpt.Airport:HND&acl:consumerKey=abc',
+  '運営会社ではなく羽田着で絞り込む（実データは JAL・ANA が出しているため）');
+await fetchArrivals({ key: 'abc' });
 assert.equal(calls.length, 1, '1分以内はキャッシュを使う');
-await fetchArrivals({ scope: 'dom', key: 'abc', force: true });
+await fetchArrivals({ key: 'abc', force: true });
 assert.equal(calls.length, 2, '更新ボタンは取り直す');
-await fetchArrivals({ scope: 'all', relay: 'https://relay.example.workers.dev/' });
-assert.equal(calls.at(-1), 'https://relay.example.workers.dev/?scope=all');
+await fetchArrivals({ relay: 'https://relay.example.workers.dev/', pass: 'secret' });
+assert.equal(calls.at(-1), 'https://relay.example.workers.dev/');
+assert.equal(sent.at(-1)[PASS_HEADER], 'secret', '中継にはパスワードをヘッダーで送る（URLには載せない）');
+assert.ok(!calls.at(-1).includes('secret'));
+assert.equal(Object.keys(sent[0]).length, 0, 'ODPT へ直接のときは余計なヘッダーを付けない');
+if (SHARED_RELAY) {
+  await fetchArrivals({ pass: 'secret', force: true });
+  assert.equal(calls.at(-1), `${SHARED_RELAY.replace(/\/+$/, '')}/`, 'パスワードだけなら共有の中継を使う');
+} else {
+  await assert.rejects(fetchArrivals({ pass: 'secret', force: true }), e => e.code === 'no_key', '共有の中継がまだないときはパスワードだけでは使えない');
+}
 mode = 'blocked';
-await assert.rejects(fetchArrivals({ scope: 'intl', key: 'abc' }), e => e.code === 'blocked' && /中継URL/.test(e.message));
+await assert.rejects(fetchArrivals({ key: 'abc', force: true }), e => e.code === 'blocked' && /中継URL/.test(e.message));
 mode = 'bad';
-await assert.rejects(fetchArrivals({ scope: 'intl', key: 'abc', force: true }), e => e.code === 'bad_key');
+await assert.rejects(fetchArrivals({ key: 'abc', force: true }), e => e.code === 'bad_key');
+await assert.rejects(fetchArrivals({ relay: 'https://relay.example.workers.dev', pass: 'wrong', force: true }), e => e.code === 'bad_pass' && /パスワード/.test(e.message));
 
 console.log('アプリ部分の確認に合格しました');

@@ -1,6 +1,6 @@
 // node test/core.test.mjs で実行
 import assert from 'node:assert/strict';
-import { normalize, delayOf, inWindow, buildResult, estimatePax, present, toMinutes } from '../js/core.js';
+import { normalize, delayOf, inWindow, buildResult, estimatePax, present, toMinutes, dataTime } from '../js/core.js';
 
 // v4仕様に近い形
 const specStyle = {
@@ -75,5 +75,52 @@ const pa = estimatePax(a); assert.equal(pa.seats, 340); assert.equal(pa.confiden
 assert.equal(estimatePax({ ...a, seatsKnown: 300 }).estimate, 216);
 const shown = present({ ...a, ...delayOf(a), cancelled: false, timeUnknown: false }, pa);
 assert.equal(shown.scheduled, '18:05'); assert.equal(shown.latest, '18:53');
+
+// 6. 2026-11 に実際の ODPT から届いた形（JAL・ANA が便ごとに出すデータ）
+const real = (no, o) => ({
+  'owl:sameAs': `odpt.FlightInformationArrival:JAL.HND.${no}`, 'odpt:airline': 'odpt.Operator:JAL', 'odpt:operator': 'odpt.Operator:JAL',
+  'odpt:flightNumber': [no], 'odpt:originAirport': 'odpt.Airport:CTS', 'odpt:arrivalAirport': 'odpt.Airport:HND',
+  'odpt:arrivalAirportTerminal': 'odpt.AirportTerminal:HND.Terminal1.NorthWing', 'odpt:aircraftType': '73H',
+  'odpt:flightStatus': 'odpt.FlightStatus:EstimatedArrival', 'odpt:scheduledArrivalTime': '18:05', ...o,
+});
+const rj = normalize(real('JL514', { 'odpt:estimatedArrivalTime': '18:35' }));
+assert.equal(rj.airline.code, 'JAL'); assert.equal(rj.airline.name, 'JAL');
+assert.equal(rj.origin.name, '札幌(新千歳)'); assert.equal(rj.terminal, 'T1'); assert.equal(rj.domestic, true);
+assert.equal(estimatePax(rj).aircraft, 'ボーイング737-800', '"73H" は 737-800');
+assert.equal(normalize(real('NH50', { 'odpt:aircraftType': '78K' })).aircraftRaw, '78K');
+assert.equal(estimatePax(normalize(real('NH50', { 'odpt:aircraftType': '78K' }))).aircraft, 'ボーイング787-9', '787 の派生型は 787-9 に寄せる');
+assert.equal(estimatePax(normalize(real('JL70', { 'odpt:aircraftType': '788' }))).aircraft, 'ボーイング787-8');
+assert.equal(normalize(real('JL1', { 'odpt:arrivalAirportTerminal': 'odpt.AirportTerminal:HND.Terminal1.SouthWing' })).terminal, 'T1');
+assert.equal(normalize(real('NH1', { 'odpt:arrivalAirportTerminal': 'odpt.AirportTerminal:HND.Terminal2' })).terminal, 'T2');
+assert.equal(normalize(real('JL001', { 'odpt:originAirport': 'odpt.Airport:SFO' })).domestic, false);
+
+// 6-1. 前日 20:25 予定の便が今日 01:21 に着いたもの（同じ便名の当日便と並んで届く）
+const yday = real('JL026', { 'owl:sameAs': 'x.JL026.1', 'odpt:originAirport': 'odpt.Airport:HKG', 'odpt:arrivalAirportTerminal': 'odpt.AirportTerminal:HND.Terminal3',
+  'odpt:aircraftType': '789', 'odpt:flightStatus': 'odpt.FlightStatus:Arrived', 'odpt:scheduledArrivalTime': '20:25', 'odpt:actualArrivalTime': '01:21' });
+const today = { ...yday, 'owl:sameAs': 'x.JL026.2', 'odpt:actualArrivalTime': undefined, 'odpt:flightStatus': undefined, 'odpt:estimatedArrivalTime': '20:50' };
+const ry = buildResult([yday, today], { from: 1200, to: 1260, threshold: 15 });
+assert.equal(ry.watched, 1, '前日便は今日の予定に入れない'); assert.equal(ry.flights[0].delayMin, 25);
+assert.equal(buildResult([yday, today], { from: 60, to: 120, threshold: 15, basis: 'latest' }).flights[0].delayMin, 296, '見込み基準なら着いた時刻で拾う');
+
+// 6-2. 同時刻・同出発地でも機材が違えば別の便（ANA 777 と エア・ドゥの 767）
+const ana = real('NH064', { 'odpt:airline': 'odpt.Operator:ANA', 'odpt:arrivalAirportTerminal': 'odpt.AirportTerminal:HND.Terminal2', 'odpt:aircraftType': '772', 'odpt:estimatedArrivalTime': '18:50' });
+const ado = { ...ana, 'owl:sameAs': 'x.NH4724', 'odpt:flightNumber': ['NH4724'], 'odpt:aircraftType': '763', 'odpt:estimatedArrivalTime': '18:30' };
+assert.equal(buildResult([ana, ado], { from: 1080, to: 1200, threshold: 15 }).flights.length, 2);
+
+// 6-3. 状況が空でも「出発遅延」のお知らせがあれば、時刻未定の遅れとして出す
+const notice = real('JL600', { 'odpt:flightStatus': undefined, 'odpt:flightInformationSummary': { en: 'Delayed', ja: '出発遅延' } });
+const rn = buildResult([notice], { from: 1080, to: 1200, threshold: 15 });
+assert.equal(rn.flights.length, 1); assert.equal(rn.flights[0].timeUnknown, true); assert.equal(rn.flights[0].status.label, '出発遅延');
+
+// 6-4. 国内線・国際線の絞り込みは取得後に行う
+const intlRec = real('JL001', { 'odpt:originAirport': 'odpt.Airport:SFO', 'odpt:estimatedArrivalTime': '18:45' });
+const mixed = [real('JL514', { 'odpt:estimatedArrivalTime': '18:35' }), intlRec];
+assert.deepEqual(buildResult(mixed, { from: 1080, to: 1200, threshold: 15, scope: 'dom' }).flights.map(f => f.flightNumbers[0]), ['JL 514']);
+assert.deepEqual(buildResult(mixed, { from: 1080, to: 1200, threshold: 15, scope: 'intl' }).flights.map(f => f.flightNumbers[0]), ['JL 1']);
+assert.equal(buildResult(mixed, { from: 1080, to: 1200, threshold: 15 }).flights.length, 2);
+
+// 7. データの作成時刻（dc:date の最新）を出す
+assert.equal(dataTime([{ 'dc:date': '2026-11-09T16:09:36+09:00' }, { 'dc:date': '2026-11-09T16:13:17+09:00' }, {}]), 16 * 60 + 13);
+assert.equal(dataTime([{}]), null);
 
 console.log('すべてのテストに合格しました', r.flights.map(f => `${f.flightNumbers[0]} ${f.delayMin ?? f.status.label}`));

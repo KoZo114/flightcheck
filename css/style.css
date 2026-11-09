@@ -127,6 +127,7 @@ button, input { font: inherit; color: inherit; }
 .board-head { padding: 18px 16px 14px; border-bottom: 1px solid var(--board-line); }
 .board-title { font-size: 14px; color: var(--board-ink-2); margin: 0 0 10px; }
 .board-title b { font-family: var(--num); font-size: 18px; color: var(--board-ink); font-weight: 600; letter-spacing: .02em; }
+.board-title .data-at { white-space: nowrap; margin-left: .5em; }
 .stats { display: flex; gap: 22px; flex-wrap: wrap; align-items: flex-end; }
 .stat .v { font-family: var(--num); font-weight: 700; font-size: 44px; line-height: 1; font-variant-numeric: tabular-nums; }
 .stat .v small { font-family: var(--jp); font-size: 15px; font-weight: 500; margin-left: 3px; }
@@ -206,6 +207,7 @@ button, input { font: inherit; color: inherit; }
 
 .note { font-size: 12px; color: var(--ink-3); padding: 14px 0 28px; line-height: 1.7; }
 .note p { margin: 0 0 4px; }
+.note a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 .demo-badge {
   display: inline-block; margin-left: 8px; font-size: 12px; font-weight: 700; padding: 2px 8px;
   border-radius: 999px; background: var(--sign-ink); color: var(--sign); vertical-align: middle;

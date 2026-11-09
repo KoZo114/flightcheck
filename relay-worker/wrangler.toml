@@ -6,5 +6,7 @@ compatibility_date = "2026-10-01"
 # GitHub Pages のURL（https://ユーザー名.github.io）。末尾のスラッシュやリポジトリ名は付けない
 ALLOWED_ORIGIN = "https://kozo114.github.io"
 
-# ODPT_KEY は次のコマンドで登録する（ここには書かない）
+# ODPT_KEY（ODPT のトークン）と ACCESS_PASSWORD（画面で入れてもらうパスワード）は
+# 次のコマンドで登録する（ここには書かない。公開リポジトリなので誰でも読めてしまう）
 #   npx wrangler secret put ODPT_KEY
+#   npx wrangler secret put ACCESS_PASSWORD

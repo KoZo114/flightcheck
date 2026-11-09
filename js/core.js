@@ -32,6 +32,12 @@ export function toMinutes(v) {
   return jstNow(d).minutes;
 }
 
+// データが作られた時刻（dc:date の最新、0時からの分）。ODPT の開発者ガイドラインで画面への表示が求められている
+export function dataTime(records) {
+  const ms = records.map(r => Date.parse(r['dc:date'])).filter(Number.isFinite);
+  return ms.length ? jstNow(new Date(Math.max(...ms))).minutes : null;
+}
+
 export const fmt = m => (m == null ? null : `${String(Math.floor(((m % 1440) + 1440) % 1440 / 60)).padStart(2, '0')}:${String(((m % 60) + 60) % 60).padStart(2, '0')}`);
 
 function flightNo(raw) {
@@ -52,9 +58,11 @@ function terminalLabel(raw) {
 export function normalize(r) {
   const nums = [].concat(first(r['odpt:flightNumber'], r['odpt:flightNumbers'], []) || []).filter(Boolean);
   const flightNumbers = [...new Set(nums.map(flightNo))];
-  const airlineRaw = strip(first(r['odpt:airline'], null), 'odpt.Airline:') || (flightNumbers[0] || '').slice(0, 2);
+  const airlineRaw = strip(first(r['odpt:airline'], null), /^odpt\.(Airline|Operator):/) || (flightNumbers[0] || '').slice(0, 2);
   const origin = strip(first(r['odpt:departureAirport'], r['odpt:originAirport']), 'odpt.Airport:');
   const status = strip(first(r['odpt:flightStatus'], null), 'odpt.FlightStatus:');
+  // 実データでは状況が空でも「出発遅延」などのお知らせだけ付いていることがある
+  const summary = r['odpt:flightInformationSummary'] || null;
   const scheduled = toMinutes(first(r['odpt:scheduledArrivalTime'], r['odpt:scheduledTime']));
   const estimated = toMinutes(first(r['odpt:estimatedArrivalTime'], r['odpt:estimatedTime']));
   const actual = toMinutes(first(r['odpt:actualArrivalTime'], r['odpt:actualTime']));
@@ -67,20 +75,23 @@ export function normalize(r) {
     domestic: origin ? DOMESTIC.has(origin) : !/TIAT/.test(r['odpt:operator'] || ''),
     terminal: terminalLabel(first(r['odpt:arrivalAirportTerminal'], r['odpt:terminal'])),
     gate: gate || null,
-    status: status ? { code: status, label: STATUS_JA[status] || status } : null,
+    status: status ? { code: status, label: STATUS_JA[status] || status } : (summary?.ja ? { code: null, label: summary.ja } : null),
+    delayNotice: /Delay/i.test(summary?.en || ''),
     aircraftRaw: first(r['odpt:aircraftModel'], r['odpt:aircraftType'], null),
     scheduled, estimated, actual,
   };
 }
 
 // 予定と最新（実績→見込みの順）との差。日付またぎも考慮
+// 実績が予定より12時間以上前に見える便は「前日の予定便が0時を過ぎて着いた」もの（prevDay）
 export function delayOf(f) {
   const latest = f.actual ?? f.estimated;
-  if (f.scheduled == null || latest == null) return { latest: null, latestKind: null, delayMin: null };
+  if (f.scheduled == null || latest == null) return { latest: null, latestKind: null, delayMin: null, prevDay: false };
   let d = latest - f.scheduled;
+  const prevDay = f.actual != null && d < -720;
   if (d < -720) d += 1440;
   if (d > 720) d -= 1440;
-  return { latest, latestKind: f.actual != null ? 'actual' : 'estimated', delayMin: d };
+  return { latest, latestKind: f.actual != null ? 'actual' : 'estimated', delayMin: d, prevDay };
 }
 
 export function inWindow(m, from, to) {
@@ -89,15 +100,19 @@ export function inWindow(m, from, to) {
 }
 
 // コードシェアが別レコードで来た場合にひとつへまとめる
+// 同じ便名（前日便と当日便）や、機材が違う便（同時刻に着く別の便）はまとめない
 export function dedupe(list) {
   const map = new Map();
   for (const f of list) {
     const key = `${f.scheduled}|${f.origin.code}|${f.terminal}`;
-    const hit = map.get(key);
+    const hits = map.get(key) || [];
+    const hit = hits.find(h =>
+      !h.flightNumbers.some(n => f.flightNumbers.includes(n)) &&
+      (!h.aircraftRaw || !f.aircraftRaw || h.aircraftRaw === f.aircraftRaw));
     if (hit) hit.flightNumbers = [...new Set([...hit.flightNumbers, ...f.flightNumbers])];
-    else map.set(key, { ...f, flightNumbers: [...f.flightNumbers] });
+    else map.set(key, [...hits, { ...f, flightNumbers: [...f.flightNumbers] }]);
   }
-  return [...map.values()];
+  return [...map.values()].flat();
 }
 
 // 推定人数。機材がわかれば座席数から、わからなければ路線から目安を出す
@@ -123,18 +138,20 @@ export function estimatePax(f, opts = {}) {
 
 // 画面に返す結果を組み立てる
 export function buildResult(records, q, opts = {}) {
-  const { from, to, threshold = 15, basis = 'scheduled', includeCancelled = true } = q;
+  const { from, to, threshold = 15, basis = 'scheduled', includeCancelled = true, scope = 'all' } = q;
   const flights = dedupe(records.map(normalize));
   const out = [];
   let watched = 0;
   for (const f of flights) {
+    if (scope !== 'all' && f.domestic !== (scope === 'dom')) continue;
     const d = delayOf(f);
+    if (basis !== 'latest' && d.prevDay) continue; // 予定時刻は前日なので「今日の予定」には入れない
     const ref = basis === 'latest' ? (d.latest ?? f.scheduled) : f.scheduled;
     if (!inWindow(ref, from, to)) continue;
     watched++;
     const code = f.status?.code;
     const cancelled = CANCEL_STATUSES.has(code);
-    const flaggedLate = DELAY_STATUSES.has(code);
+    const flaggedLate = DELAY_STATUSES.has(code) || f.delayNotice;
     const late = d.delayMin != null ? d.delayMin >= threshold : flaggedLate;
     if (cancelled ? !includeCancelled : !late) continue;
     out.push({ ...f, ...d, cancelled, timeUnknown: !cancelled && d.delayMin == null });

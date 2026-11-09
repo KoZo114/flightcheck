@@ -27,6 +27,7 @@ export function demoRecords(fromMin, toMin, scope = 'all') {
       const sched = (fromMin + Math.round(span * (i + 0.5) / POOL.length)) % 1440;
       return {
         '@type': 'odpt:FlightInformationArrival',
+        'dc:date': new Date().toISOString(),
         'owl:sameAs': `odpt.FlightInformationArrival:demo.${nos[0]}`,
         'odpt:operator': `odpt.Operator:${op}`,
         'odpt:airline': `odpt.Airline:${air}`,

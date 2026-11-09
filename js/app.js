@@ -1,6 +1,6 @@
 // 画面の動き：条件の入力 → ODPT取得 → 遅延判定 → 到着ボードに表示
-import { buildResult, estimatePax, present, fmt, jstNow } from './core.js';
-import { fetchArrivals, OdptError } from './odpt.js';
+import { buildResult, estimatePax, present, fmt, jstNow, dataTime } from './core.js';
+import { fetchArrivals, OdptError, SHARED_RELAY } from './odpt.js';
 import { demoRecords } from './demo.js';
 
 const $ = s => document.querySelector(s);
@@ -14,6 +14,7 @@ const store = {
 
 const settings = {
   key: store.get('odptKey', ''),
+  pass: store.get('sharedPass', ''),
   relay: store.get('relayUrl', ''),
   lfDom: store.get('lfDom', 72),
   lfIntl: store.get('lfIntl', 80),
@@ -72,16 +73,20 @@ $('#cancelled').addEventListener('change', e => store.set('cancelled', e.target.
 $('#go').addEventListener('click', () => search());
 
 // ---------- 設定ダイアログ ----------
+// トークン・中継URL・（共有の中継があれば）パスワードのどれかがあれば検索できる
+const canFetch = () => !!(settings.key || settings.relay || (settings.pass && SHARED_RELAY));
+$('#passField').hidden = !SHARED_RELAY;
 let afterSave = null;
 function openSettings(then) {
   afterSave = then || null;
   $('#odptKey').value = settings.key;
+  $('#sharedPass').value = settings.pass;
   $('#relayUrl').value = settings.relay;
   $('#lfDom').value = settings.lfDom;
   $('#lfIntl').value = settings.lfIntl;
   if (settings.relay) $('#advanced').open = true;
   $('#gate').classList.add('show');
-  (settings.key ? $('#closeSettings') : $('#odptKey')).focus();
+  (canFetch() ? $('#closeSettings') : $('#odptKey')).focus();
 }
 function closeSettings() { $('#gate').classList.remove('show'); $('#openSettings').focus(); }
 $('#openSettings').addEventListener('click', () => openSettings());
@@ -91,10 +96,11 @@ $('#gateForm').addEventListener('submit', e => {
   e.preventDefault();
   const clamp = (v, d) => { const n = parseInt(v, 10); return Number.isFinite(n) ? Math.min(100, Math.max(30, n)) : d; };
   settings.key = $('#odptKey').value.trim();
+  settings.pass = $('#sharedPass').value.trim();
   settings.relay = $('#relayUrl').value.trim();
   settings.lfDom = clamp($('#lfDom').value, 72);
   settings.lfIntl = clamp($('#lfIntl').value, 80);
-  store.set('odptKey', settings.key); store.set('relayUrl', settings.relay);
+  store.set('odptKey', settings.key); store.set('sharedPass', settings.pass); store.set('relayUrl', settings.relay);
   store.set('lfDom', settings.lfDom); store.set('lfIntl', settings.lfIntl);
   try { Object.keys(sessionStorage).filter(k => k.startsWith('hnd:odpt:')).forEach(k => sessionStorage.removeItem(k)); } catch {}
   closeSettings();
@@ -104,7 +110,7 @@ $('#gateForm').addEventListener('submit', e => {
 
 // ---------- 検索 ----------
 async function search({ force = false } = {}) {
-  if (!DEMO && !settings.key && !settings.relay) { openSettings(() => search()); return; }
+  if (!DEMO && !canFetch()) { openSettings(() => search()); return; }
   const from = toMin($('#from').value) ?? roundDown5(nowMin());
   const to = toMin($('#to').value) ?? Math.min(from + 120, LAST);
   const q = {
@@ -119,7 +125,7 @@ async function search({ force = false } = {}) {
   try {
     const records = DEMO
       ? await new Promise(r => setTimeout(() => r(demoRecords(from, to, q.scope)), 350))
-      : await fetchArrivals({ scope: q.scope, key: settings.key, relay: settings.relay, force });
+      : await fetchArrivals({ key: settings.key, relay: settings.relay, pass: settings.pass, force });
     state.data = compute(records, q);
     renderBoard(true);
   } catch (e) {
@@ -135,6 +141,7 @@ function compute(records, q) {
   const items = flights.map(f => present(f, f.cancelled ? null : estimatePax(f, opts)));
   return {
     generatedAt: fmt(nowMin()),
+    dataAt: fmt(dataTime(records)),
     query: { from: fmt(q.from), to: fmt(q.to), threshold: q.threshold, basis: q.basis },
     counts: {
       watched,
@@ -158,7 +165,7 @@ function renderLoading() {
 
 function renderError(e) {
   board.hidden = false;
-  const needsSettings = e instanceof OdptError && ['no_key', 'bad_key', 'blocked', 'relay_unreachable'].includes(e.code);
+  const needsSettings = e instanceof OdptError && ['no_key', 'bad_key', 'bad_pass', 'blocked', 'relay_unreachable'].includes(e.code);
   board.innerHTML = `<div class="err"><h3>結果を表示できませんでした</h3><p>${esc(e.message || '原因不明のエラーです。')}</p>
     <button class="refresh" type="button" id="errAction">${needsSettings ? '設定を開く' : 'もう一度探す'}</button></div>`;
   $('#errAction').onclick = () => (needsSettings ? openSettings(() => search({ force: true })) : search({ force: true }));
@@ -211,7 +218,7 @@ function renderBoard(reveal) {
   if (state.sort === 'time') list.sort((a, b) => toMin(a.scheduled) - toMin(b.scheduled));
   const q = d.query;
   const head = `<div class="board-head">
-    <p class="board-title"><b>${esc(q.from)}〜${esc(q.to)}</b> に${q.basis === 'latest' ? '着く見込み' : '着く予定'}の便　${d.counts.watched}便中${DEMO ? '<span class="demo-badge">デモ表示</span>' : ''}</p>
+    <p class="board-title"><b>${esc(q.from)}〜${esc(q.to)}</b> に${q.basis === 'latest' ? '着く見込み' : '着く予定'}の便　${d.counts.watched}便中${d.dataAt ? `<span class="data-at">データ ${esc(d.dataAt)} 時点</span>` : ''}${DEMO ? '<span class="demo-badge">デモ表示</span>' : ''}</p>
     <div class="stats">
       <div class="stat s-delay"><div class="v">${d.counts.delayed}<small>便</small></div><div class="k">${q.threshold}分以上の遅れ</div></div>
       <div class="stat"><div class="v">${d.counts.cancelled}<small>便</small></div><div class="k">欠航・行き先変更</div></div>
@@ -251,4 +258,4 @@ syncSeg();
 const n = roundDown5(nowMin());
 setRange(n, Math.min(n + 120, LAST));
 if (DEMO) search();
-else if (!settings.key && !settings.relay) openSettings();
+else if (!canFetch()) openSettings();

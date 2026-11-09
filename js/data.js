@@ -13,6 +13,7 @@ export const AIRPORTS = {
   KCZ: '高知', MYJ: '松山', FUK: '福岡', KKJ: '北九州', HSG: '佐賀',
   NGS: '長崎', KMJ: '熊本', OIT: '大分', KMI: '宮崎', KOJ: '鹿児島',
   ASJ: '奄美', OKA: '沖縄(那覇)', ISG: '石垣', MMY: '宮古', SHI: '下地島',
+  SHM: '南紀白浜',
   // 国際
   ICN: 'ソウル(仁川)', GMP: 'ソウル(金浦)', PUS: '釜山', PEK: '北京(首都)',
   PKX: '北京(大興)', PVG: '上海(浦東)', SHA: '上海(虹橋)', CAN: '広州',
@@ -36,7 +37,7 @@ export const DOMESTIC = new Set([
   'CTS','OKD','HKD','AKJ','KUH','OBO','MMB','WKJ','MBE','SHB','AOJ','MSJ','HNA','AXT','ONJ',
   'GAJ','SYO','SDJ','KIJ','HAC','OIM','MYE','KMQ','TOY','NTQ','NGO','ITM','KIX','UKB','OKJ',
   'HIJ','IWK','UBJ','TTJ','YGJ','IZO','IWJ','TKS','TAK','KCZ','MYJ','FUK','KKJ','HSG','NGS',
-  'KMJ','OIT','KMI','KOJ','ASJ','OKA','ISG','MMY','SHI',
+  'KMJ','OIT','KMI','KOJ','ASJ','OKA','ISG','MMY','SHI','SHM',
 ]);
 
 // 大型機が多い国内幹線
@@ -58,7 +59,7 @@ export const AIRLINES = {
 };
 
 // 機材ごとの座席数（国内線仕様 / 国際線仕様のおおよその値）
-// キーは ICAO 機材コード。ODPT の機材名（例 "787-8"）も normalizeAircraft で寄せる。
+// キーは ICAO 機材コード。ODPT の機材名（例 "787-8"）や IATA 型式コード（例 "789" "73H"）も normalizeAircraft で寄せる。
 export const SEATS = {
   B788: { dom: 335, intl: 206, name: 'ボーイング787-8' },
   B789: { dom: 377, intl: 215, name: 'ボーイング787-9' },
@@ -88,12 +89,14 @@ export function normalizeAircraft(raw) {
   const s = String(raw).toUpperCase().replace(/^ODPT\.AIRCRAFTTYPE:/, '').replace(/[\s_]/g, '');
   if (SEATS[s]) return s;
   const map = [
-    [/7878|787-8|B787-8/, 'B788'], [/7879|787-9/, 'B789'], [/78710|787-10/, 'B78X'],
+    [/^788$|7878|787-8|B787-8/, 'B788'], [/^789$|7879|787-9/, 'B789'], [/^781$|78710|787-10/, 'B78X'],
     [/77W|777-300ER/, 'B77W'], [/773|777-300/, 'B773'], [/772|777-200/, 'B772'],
     [/763|767-300/, 'B763'], [/7M8|737MAX|38M/, 'B38M'], [/738|737-800/, 'B738'], [/739|737-900/, 'B739'],
     [/32N|A20N|A320NEO/, 'A20N'], [/320|A320/, 'A320'], [/32Q|A21N|A321NEO/, 'A21N'], [/321|A321/, 'A321'],
     [/359|A350-900/, 'A359'], [/351|A35K|A350-1000/, 'A35K'], [/333|A330/, 'A333'], [/388|A380/, 'A388'],
-    [/E70|E170|ERJ170/, 'E170'], [/E90|E190|ERJ190/, 'E190'], [/DH4|Q400|DHC8/, 'DH8D'],
+    [/E70|E170|ERJ170/, 'E170'], [/E90|E190|ERJ190/, 'E190'], [/DH4|Q84|Q400|DHC8/, 'DH8D'],
+    // JAL・ANA が使う派生型のコード（例 "73H" "78K" "76P" "32S"）は、型式の系列で近い機材に寄せる
+    [/^78/, 'B789'], [/^76/, 'B763'], [/^73/, 'B738'], [/^32/, 'A320'],
   ];
   for (const [re, code] of map) if (re.test(s)) return code;
   return null;

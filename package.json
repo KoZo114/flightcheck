@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/core.test.mjs && node test/app.test.mjs",
+    "test": "node test/core.test.mjs && node test/app.test.mjs && node test/relay.test.mjs",
     "serve": "python3 -m http.server 8080"
   }
 }
