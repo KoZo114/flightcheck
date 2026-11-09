@@ -6,15 +6,15 @@ const hm = m => `${pad(Math.floor(((m % 1440) + 1440) % 1440 / 60))}:${pad(((m %
 
 // [出発地, 便名, 航空会社, 運営, ターミナル, 機材, 遅れ(分), 状況]
 const POOL = [
-  ['CTS', ['JL512', 'NU1512'], 'JAL', 'HND-JAT', 'Terminal1', '787-9', 48, 'Delayed'],
+  ['CTS', ['JL512', 'NU1512'], 'JAL', 'HND-JAT', 'Terminal1.NorthWing', '787-9', 48, 'Delayed'],
   ['FUK', ['NH256', '6J1256'], 'ANA', 'HND-JAT', 'Terminal2', '787-10', 22, 'EstimatedArrival'],
-  ['OKA', ['JL918'], 'JAL', 'HND-JAT', 'Terminal1', null, 75, 'LateArrival'],
+  ['OKA', ['JL918'], 'JAL', 'HND-JAT', 'Terminal1.SouthWing', null, 75, 'LateArrival'],
   ['GMP', ['KE2709', 'JL5237'], 'KAL', 'HND-TIAT', 'InternationalPassengerTerminal', 'A330-300', 31, 'Delayed'],
   ['ITM', ['NH34'], 'ANA', 'HND-JAT', 'Terminal2', '777-200', 17, 'InAir'],
   ['KOJ', ['BC304'], 'SKY', 'HND-JAT', 'Terminal1', '737-800', 26, 'Delayed'],
   ['HAC', ['NH1894'], 'ANA', 'HND-JAT', 'Terminal2', null, null, 'Cancelled'],
   ['TSA', ['BR192', 'NH5826'], 'EVA', 'HND-TIAT', 'InternationalPassengerTerminal', null, 112, 'Delayed'],
-  ['KMJ', ['JL630'], 'JAL', 'HND-JAT', 'Terminal1', null, null, 'Indefinite'],
+  ['KMJ', ['JL630'], 'JAL', 'HND-JAT', 'Terminal1.SouthWing', null, null, 'Indefinite'],
   ['HKD', ['NH556'], 'ANA', 'HND-JAT', 'Terminal2', null, 3, 'EstimatedArrival'],
   ['SIN', ['SQ634'], 'SIA', 'HND-TIAT', 'InternationalPassengerTerminal', '787-10', 0, 'OnTime'],
 ];

@@ -54,6 +54,14 @@ function terminalLabel(raw) {
   return s ? s.split('.').pop() : null;
 }
 
+// 第1ターミナルは到着口が北ウイング・南ウイングに分かれている
+function wingLabel(raw) {
+  const s = String(raw || '');
+  if (/North/i.test(s)) return '北';
+  if (/South/i.test(s)) return '南';
+  return null;
+}
+
 // ODPT のレコード1件を扱いやすい形にそろえる（仕様と実データの揺れを吸収）
 export function normalize(r) {
   const nums = [].concat(first(r['odpt:flightNumber'], r['odpt:flightNumbers'], []) || []).filter(Boolean);
@@ -67,13 +75,15 @@ export function normalize(r) {
   const estimated = toMinutes(first(r['odpt:estimatedArrivalTime'], r['odpt:estimatedTime']));
   const actual = toMinutes(first(r['odpt:actualArrivalTime'], r['odpt:actualTime']));
   const gate = strip(first(r['odpt:arrivalGate'], r['odpt:gate']), /^.*\./);
+  const terminalRaw = first(r['odpt:arrivalAirportTerminal'], r['odpt:terminal']);
   return {
     id: first(r['owl:sameAs'], r['@id'], `${flightNumbers[0]}-${scheduled}`),
     flightNumbers,
     airline: { code: airlineRaw, name: AIRLINES[airlineRaw] || AIRLINES[(flightNumbers[0] || '').slice(0, 2)] || airlineRaw },
     origin: { code: origin, name: AIRPORTS[origin] || origin },
     domestic: origin ? DOMESTIC.has(origin) : !/TIAT/.test(r['odpt:operator'] || ''),
-    terminal: terminalLabel(first(r['odpt:arrivalAirportTerminal'], r['odpt:terminal'])),
+    terminal: terminalLabel(terminalRaw),
+    wing: wingLabel(terminalRaw),
     gate: gate || null,
     status: status ? { code: status, label: STATUS_JA[status] || status } : (summary?.ja ? { code: null, label: summary.ja } : null),
     delayNotice: /Delay/i.test(summary?.en || ''),
@@ -142,6 +152,7 @@ export function buildResult(records, q, opts = {}) {
   const flights = dedupe(records.map(normalize));
   const out = [];
   let watched = 0;
+  const watchedBy = {}; // ターミナル別の対象便数
   for (const f of flights) {
     if (scope !== 'all' && f.domestic !== (scope === 'dom')) continue;
     const d = delayOf(f);
@@ -149,6 +160,7 @@ export function buildResult(records, q, opts = {}) {
     const ref = basis === 'latest' ? (d.latest ?? f.scheduled) : f.scheduled;
     if (!inWindow(ref, from, to)) continue;
     watched++;
+    watchedBy[f.terminal] = (watchedBy[f.terminal] || 0) + 1;
     const code = f.status?.code;
     const cancelled = CANCEL_STATUSES.has(code);
     const flaggedLate = DELAY_STATUSES.has(code) || f.delayNotice;
@@ -157,7 +169,7 @@ export function buildResult(records, q, opts = {}) {
     out.push({ ...f, ...d, cancelled, timeUnknown: !cancelled && d.delayMin == null });
   }
   out.sort((a, b) => (b.cancelled - a.cancelled) || ((b.delayMin ?? 9999) - (a.delayMin ?? 9999)) || a.scheduled - b.scheduled);
-  return { flights: out, watched };
+  return { flights: out, watched, watchedBy };
 }
 
 export function present(f, pax) {
@@ -168,6 +180,7 @@ export function present(f, pax) {
     origin: f.origin,
     domestic: f.domestic,
     terminal: f.terminal,
+    wing: f.wing,
     gate: f.gate,
     status: f.status,
     scheduled: fmt(f.scheduled),

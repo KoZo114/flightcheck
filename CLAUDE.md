@@ -73,7 +73,7 @@ npm run serve            # http://localhost:8080/?demo でデモ表示
 | 見込み時刻 | `odpt:estimatedArrivalTime` | 同じ（約4割の便だけ） | `odpt:estimatedTime` |
 | 実績時刻 | `odpt:actualArrivalTime` | 同じ | `odpt:actualTime` |
 | ターミナル | `odpt:arrivalAirportTerminal` | `HND.Terminal1.NorthWing` / `Terminal1.SouthWing` / `Terminal1` / `Terminal2` / `Terminal3` | `odpt:terminal` |
-| ゲート | `odpt:arrivalGate` | ANA だけ `"1,2,3"` のような値（画面では使っていない） | `odpt:gate` |
+| ゲート | `odpt:arrivalGate` | ANA だけ `"1,2,3"` のような値（詳細を開くと「ゲート」として出る） | `odpt:gate` |
 | 出発地 | `odpt:departureAirport` | `odpt:originAirport` | — |
 | 機材 | なし | `odpt:aircraftType`（`"73H"` `"789"` `"78K"` `"76P"` `"32S"` など IATA 系の型式コード。1割弱は無し） | `odpt:aircraftModel` |
 | 航空会社 | `odpt:airline` | `odpt.Operator:JAL` / `odpt.Operator:ANA` | `odpt.Airline:JAL`、`JAL` |
@@ -92,6 +92,8 @@ npm run serve            # http://localhost:8080/?demo でデモ表示
 - 同じ予定時刻・出発地・ターミナルの便はコードシェアとしてひとつにまとめる。ただし同じ便名どうし・機材が違うもの（例：ANA の 777 とエア・ドゥの 767 が同時刻に新千歳から着く）はまとめない
 - 時間帯は「予定時刻」基準（既定）か「見込み時刻」基準を選べる。0時またぎも可
   - 画面の言葉は「時間帯をどの時刻で見るか：時刻表の時刻／実際に着く時刻」（利用者にわかりやすい言い方に合わせた）
+- 結果は「すべて／第1／第2／第3」のターミナル切り替え（件数つき、`localStorage` の `hnd:terminal` に保存）で絞れる。取り直しはせず画面上で絞る
+  - 第1ターミナルは `Terminal1.NorthWing` / `SouthWing` から「北」「南」ウイングも出す（`normalize()` の `wing`）
 
 ### 推定人数（core.js `estimatePax`）
 

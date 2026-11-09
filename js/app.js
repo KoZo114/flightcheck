@@ -25,6 +25,7 @@ const state = {
   scope: store.get('scope', 'all'),
   basis: store.get('basis', 'scheduled'),
   sort: store.get('sort', 'delay'),
+  terminal: store.get('terminal', 'all'),
   data: null,
 };
 
@@ -136,22 +137,24 @@ async function search({ force = false } = {}) {
 }
 
 function compute(records, q) {
-  const { flights, watched } = buildResult(records, q);
+  const { flights, watched, watchedBy } = buildResult(records, q);
   const opts = { loadFactorDom: settings.lfDom / 100, loadFactorIntl: settings.lfIntl / 100 };
   const items = flights.map(f => present(f, f.cancelled ? null : estimatePax(f, opts)));
   return {
     generatedAt: fmt(nowMin()),
     dataAt: fmt(dataTime(records)),
     query: { from: fmt(q.from), to: fmt(q.to), threshold: q.threshold, basis: q.basis },
-    counts: {
-      watched,
-      delayed: items.filter(f => !f.cancelled).length,
-      cancelled: items.filter(f => f.cancelled).length,
-    },
-    paxTotal: items.reduce((s, f) => s + (f.pax?.estimate || 0), 0),
+    watched, watchedBy,
     flights: items,
   };
 }
+
+// ---------- ターミナル ----------
+const TERMINALS = ['T1', 'T2', 'T3'];
+const TERMINAL_NAMES = { T1: '第1ターミナル', T2: '第2ターミナル', T3: '第3ターミナル' };
+const termName = f => TERMINAL_NAMES[f.terminal] || f.terminal || '';
+const termShort = f => termName(f) + (f.wing ? `（${f.wing}）` : '');
+const termFull = f => termName(f) + (f.wing ? ` ${f.wing}ウイング` : '');
 
 // ---------- 描画 ----------
 const board = $('#board');
@@ -195,7 +198,7 @@ function rowHtml(f, i) {
       <div class="m-col">
         <div class="origin">${esc(f.origin.name || '出発地不明')}<span class="from">発</span></div>
         <div class="fnos"><span class="fno">${esc(main || '')}</span>${shares.slice(0, 2).map(s => `<span class="fno sub">${esc(s)}</span>`).join('')}${shares.length > 2 ? `<span class="fno sub">ほか${shares.length - 2}</span>` : ''}</div>
-        <div class="meta">${esc(f.airline.name || '')}${f.terminal ? `　${esc(f.terminal)}` : ''}</div>
+        <div class="meta">${esc(f.airline.name || '')}${f.terminal ? `　${esc(termShort(f))}` : ''}</div>
       </div>
       <div class="r-col">${delayBadge(f)}${pax}</div>
     </button>
@@ -204,7 +207,7 @@ function rowHtml(f, i) {
         <dt>予定</dt><dd class="num">${esc(f.scheduled)}</dd>
         ${f.latest ? `<dt>${f.latestKind === 'actual' ? '到着' : '見込み'}</dt><dd class="num">${esc(f.latest)}</dd>` : ''}
         ${f.status ? `<dt>状況</dt><dd>${esc(f.status.label)}</dd>` : ''}
-        ${f.terminal || f.gate ? `<dt>到着場所</dt><dd>${esc(f.terminal || '')}${f.gate ? `　ゲート ${esc(f.gate)}` : ''}</dd>` : ''}
+        ${f.terminal || f.gate ? `<dt>到着場所</dt><dd>${esc(termFull(f))}${f.gate ? `　ゲート ${esc(f.gate)}` : ''}</dd>` : ''}
         ${f.pax ? `<dt>推定人数</dt><dd>約 ${num(f.pax.estimate)} 人<span class="conf">${conf}</span><br><span class="num">${basis}</span>${f.pax.aircraft ? `　${esc(f.pax.aircraft)}` : ''}</dd>` : ''}
         ${shares.length ? `<dt>共同運航</dt><dd class="num">${shares.map(esc).join('　')}</dd>` : ''}
       </dl>
@@ -214,15 +217,28 @@ function rowHtml(f, i) {
 
 function renderBoard(reveal) {
   const d = state.data; board.hidden = false;
-  const list = [...d.flights];
+  const term = TERMINALS.includes(state.terminal) ? state.terminal : 'all';
+  const inTerm = f => term === 'all' || f.terminal === term;
+  const list = d.flights.filter(inTerm);
   if (state.sort === 'time') list.sort((a, b) => toMin(a.scheduled) - toMin(b.scheduled));
+  const counts = {
+    watched: term === 'all' ? d.watched : (d.watchedBy[term] || 0),
+    delayed: list.filter(f => !f.cancelled).length,
+    cancelled: list.filter(f => f.cancelled).length,
+  };
+  const paxTotal = list.reduce((s, f) => s + (f.pax?.estimate || 0), 0);
   const q = d.query;
+  const termSeg = `<div class="seg term-seg" role="group" aria-label="ターミナルで分ける" id="termSeg">
+      <button type="button" data-v="all" aria-pressed="${term === 'all'}">すべて<span class="c">${d.flights.length}</span></button>
+      ${TERMINALS.map(t => `<button type="button" data-v="${t}" aria-pressed="${term === t}">第${t[1]}<span class="c">${d.flights.filter(f => f.terminal === t).length}</span></button>`).join('')}
+    </div>`;
   const head = `<div class="board-head">
-    <p class="board-title"><b>${esc(q.from)}〜${esc(q.to)}</b> に${q.basis === 'latest' ? '実際に着く' : '着く予定の'}便　${d.counts.watched}便中${d.dataAt ? `<span class="data-at">データ ${esc(d.dataAt)} 時点</span>` : ''}${DEMO ? '<span class="demo-badge">デモ表示</span>' : ''}</p>
+    <p class="board-title"><b>${esc(q.from)}〜${esc(q.to)}</b> に${q.basis === 'latest' ? '実際に着く' : '着く予定の'}便${term === 'all' ? '' : `（${TERMINAL_NAMES[term]}）`}　${counts.watched}便中${d.dataAt ? `<span class="data-at">データ ${esc(d.dataAt)} 時点</span>` : ''}${DEMO ? '<span class="demo-badge">デモ表示</span>' : ''}</p>
+    ${termSeg}
     <div class="stats">
-      <div class="stat s-delay"><div class="v">${d.counts.delayed}<small>便</small></div><div class="k">${q.threshold}分以上の遅れ</div></div>
-      <div class="stat"><div class="v">${d.counts.cancelled}<small>便</small></div><div class="k">欠航・行き先変更</div></div>
-      <div class="stat"><div class="v">${num(d.paxTotal)}<small>人</small></div><div class="k">遅れ便の推定人数</div></div>
+      <div class="stat s-delay"><div class="v">${counts.delayed}<small>便</small></div><div class="k">${q.threshold}分以上の遅れ</div></div>
+      <div class="stat"><div class="v">${counts.cancelled}<small>便</small></div><div class="k">欠航・行き先変更</div></div>
+      <div class="stat"><div class="v">${num(paxTotal)}<small>人</small></div><div class="k">遅れ便の推定人数</div></div>
     </div>
     <div class="board-tools">
       <div class="seg" role="group" aria-label="並べ替え" id="sortSeg">
@@ -234,6 +250,10 @@ function renderBoard(reveal) {
   </div>`;
   const body = list.length
     ? `<ul class="rows ${reveal ? 'reveal' : ''}">${list.map(rowHtml).join('')}</ul>`
+    : d.flights.length
+    ? `<div class="empty"><h3>${TERMINAL_NAMES[term]}に着く便で、遅れているものはありません</h3>
+       <p>ほかのターミナルには、遅れている便が${d.flights.length}便あります。</p>
+       <button class="refresh again" type="button" id="allTerm">すべてのターミナルを見る</button></div>`
     : `<div class="empty"><h3>この時間帯に遅れている便はありません</h3>
        <p>${q.threshold}分以上遅れている便は見つかりませんでした。時間帯を広げるか、遅れの基準を短くすると表示される便が増えます。</p>
        ${q.threshold > 5 ? `<button class="refresh again" type="button" id="lower">5分以上の遅れで探し直す</button>` : ''}</div>`;
@@ -243,6 +263,12 @@ function renderBoard(reveal) {
     const b = e.target.closest('button'); if (!b) return;
     state.sort = b.dataset.v; store.set('sort', state.sort); renderBoard(false);
   });
+  $('#termSeg').addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    state.terminal = b.dataset.v; store.set('terminal', state.terminal); renderBoard(false);
+  });
+  const allTerm = $('#allTerm');
+  if (allTerm) allTerm.onclick = () => { state.terminal = 'all'; store.set('terminal', 'all'); renderBoard(false); };
   $('#refresh').onclick = () => search({ force: true });
   const lower = $('#lower');
   if (lower) lower.onclick = () => { state.threshold = '5'; store.set('threshold', '5'); syncSeg(); search(); };

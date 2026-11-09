@@ -92,6 +92,10 @@ assert.equal(estimatePax(normalize(real('NH50', { 'odpt:aircraftType': '78K' }))
 assert.equal(estimatePax(normalize(real('JL70', { 'odpt:aircraftType': '788' }))).aircraft, 'ボーイング787-8');
 assert.equal(normalize(real('JL1', { 'odpt:arrivalAirportTerminal': 'odpt.AirportTerminal:HND.Terminal1.SouthWing' })).terminal, 'T1');
 assert.equal(normalize(real('NH1', { 'odpt:arrivalAirportTerminal': 'odpt.AirportTerminal:HND.Terminal2' })).terminal, 'T2');
+assert.equal(rj.wing, '北', '第1ターミナルの北ウイング');
+assert.equal(normalize(real('JL1', { 'odpt:arrivalAirportTerminal': 'odpt.AirportTerminal:HND.Terminal1.SouthWing' })).wing, '南');
+assert.equal(normalize(real('NH3840', { 'odpt:arrivalAirportTerminal': 'odpt.AirportTerminal:HND.Terminal1' })).wing, null, 'ウイングの指定がない便');
+assert.equal(normalize(real('NH1', { 'odpt:arrivalAirportTerminal': 'odpt.AirportTerminal:HND.Terminal2' })).wing, null);
 assert.equal(normalize(real('JL001', { 'odpt:originAirport': 'odpt.Airport:SFO' })).domestic, false);
 
 // 6-1. 前日 20:25 予定の便が今日 01:21 に着いたもの（同じ便名の当日便と並んで届く）
@@ -118,6 +122,13 @@ const mixed = [real('JL514', { 'odpt:estimatedArrivalTime': '18:35' }), intlRec]
 assert.deepEqual(buildResult(mixed, { from: 1080, to: 1200, threshold: 15, scope: 'dom' }).flights.map(f => f.flightNumbers[0]), ['JL 514']);
 assert.deepEqual(buildResult(mixed, { from: 1080, to: 1200, threshold: 15, scope: 'intl' }).flights.map(f => f.flightNumbers[0]), ['JL 1']);
 assert.equal(buildResult(mixed, { from: 1080, to: 1200, threshold: 15 }).flights.length, 2);
+
+// 6-5. ターミナル別の対象便数（画面のターミナル切り替えで使う）
+const t2 = real('NH100', { 'odpt:arrivalAirportTerminal': 'odpt.AirportTerminal:HND.Terminal2', 'odpt:estimatedArrivalTime': '18:10' });
+const t3 = real('JL001', { 'odpt:originAirport': 'odpt.Airport:SFO', 'odpt:arrivalAirportTerminal': 'odpt.AirportTerminal:HND.Terminal3' });
+const rb = buildResult([...mixed, t2, t3], { from: 1080, to: 1200, threshold: 15 });
+assert.deepEqual(rb.watchedBy, { T1: 2, T2: 1, T3: 1 }); assert.equal(rb.watched, 4);
+assert.equal(present(rb.flights.find(f => f.flightNumbers[0] === 'JL 514'), null).wing, '北');
 
 // 7. データの作成時刻（dc:date の最新）を出す
 assert.equal(dataTime([{ 'dc:date': '2026-11-09T16:09:36+09:00' }, { 'dc:date': '2026-11-09T16:13:17+09:00' }, {}]), 16 * 60 + 13);
