@@ -218,7 +218,7 @@ function renderBoard(reveal) {
   if (state.sort === 'time') list.sort((a, b) => toMin(a.scheduled) - toMin(b.scheduled));
   const q = d.query;
   const head = `<div class="board-head">
-    <p class="board-title"><b>${esc(q.from)}〜${esc(q.to)}</b> に${q.basis === 'latest' ? '着く見込み' : '着く予定'}の便　${d.counts.watched}便中${d.dataAt ? `<span class="data-at">データ ${esc(d.dataAt)} 時点</span>` : ''}${DEMO ? '<span class="demo-badge">デモ表示</span>' : ''}</p>
+    <p class="board-title"><b>${esc(q.from)}〜${esc(q.to)}</b> に${q.basis === 'latest' ? '実際に着く' : '着く予定の'}便　${d.counts.watched}便中${d.dataAt ? `<span class="data-at">データ ${esc(d.dataAt)} 時点</span>` : ''}${DEMO ? '<span class="demo-badge">デモ表示</span>' : ''}</p>
     <div class="stats">
       <div class="stat s-delay"><div class="v">${d.counts.delayed}<small>便</small></div><div class="k">${q.threshold}分以上の遅れ</div></div>
       <div class="stat"><div class="v">${d.counts.cancelled}<small>便</small></div><div class="k">欠航・行き先変更</div></div>

@@ -61,11 +61,12 @@
         </div>
       </div>
       <div class="opt">
-        <h2 id="bsLabel">時間帯に入れる便</h2>
-        <div class="seg" role="group" aria-labelledby="bsLabel" data-key="basis">
-          <button type="button" data-v="scheduled">予定時刻が入る便</button>
-          <button type="button" data-v="latest">見込み時刻が入る便</button>
+        <h2 id="bsLabel">時間帯をどの時刻で見るか</h2>
+        <div class="seg" role="group" aria-labelledby="bsLabel" aria-describedby="bsHelp" data-key="basis">
+          <button type="button" data-v="scheduled">時刻表の時刻</button>
+          <button type="button" data-v="latest">実際に着く時刻</button>
         </div>
+        <p class="opt-help" id="bsHelp">「実際に着く時刻」なら、遅れてこの時間帯に着く便も出ます。</p>
       </div>
       <label class="toggle"><input type="checkbox" id="cancelled" checked> 欠航・行き先変更の便も表示する</label>
     </div>
