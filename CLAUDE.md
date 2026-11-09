@@ -17,7 +17,8 @@
 コードは完成済みで、テストはすべて通っている（`npm test`）。デモデータでの表示確認も済み。
 GitHub Pages に公開済み（2026-11-03）：https://kozo114.github.io/flightcheck/ （リポジトリ `KoZo114/flightcheck`、main ブランチのルートを配信）。
 本物の ODPT データでの確認も済み（2026-11-09）。取得方法と判定を実データに合わせて直した。
-残りは「やること」の 3（スマホで実際に検索してみる）。ODPT は `Access-Control-Allow-Origin: *` を返すので、トークンを持つ本人は中継なしで直接つながる。
+2026-11-09 に利用者がスマホでパスワード経由の検索を試し、一覧が出ることを確認した（「やること」はすべて完了）。
+ODPT は `Access-Control-Allow-Origin: *` を返すので、トークンを持つ本人は中継なしで直接つながる。
 パスワードで人に使ってもらうための中継を公開済み（2026-11-09）：https://flightcheck-relay.ko3-h.workers.dev （Cloudflare アカウントは利用者のもの。secret の `ODPT_KEY` と `ACCESS_PASSWORD` は利用者が自分で登録した）。
 
 確認用のトークンは利用者の Mac の `~/.config/flightcheck/odpt_key`（リポジトリの外、権限 600）にある。
