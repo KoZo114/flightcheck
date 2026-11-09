@@ -42,7 +42,9 @@ export async function fetchArrivals({ key = '', relay = '', pass = '', force = f
     url = `${relay.replace(/\/+$/, '')}/`;
     if (pass) headers[PASS_HEADER] = pass;
   } else {
-    if (!key) throw new OdptError('no_key', 'ODPTのアクセストークンかパスワードが未設定です。右上の設定から入れてください。');
+    if (!key) throw new OdptError('no_key', SHARED_RELAY
+      ? 'パスワードが未設定です。右上の設定から、教えてもらったパスワードを入れてください。'
+      : 'ODPTのアクセストークンが未設定です。右上の設定の「詳細設定」から入れてください。');
     url = `${ODPT_URL}?${HND_FILTER}&acl:consumerKey=${encodeURIComponent(key)}`;
   }
 

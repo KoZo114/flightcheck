@@ -84,9 +84,9 @@ function openSettings(then) {
   $('#relayUrl').value = settings.relay;
   $('#lfDom').value = settings.lfDom;
   $('#lfIntl').value = settings.lfIntl;
-  if (settings.relay) $('#advanced').open = true;
+  if (settings.key || settings.relay || !SHARED_RELAY) $('#advanced').open = true; // トークン欄は詳細設定の中にある
   $('#gate').classList.add('show');
-  (canFetch() ? $('#closeSettings') : $('#odptKey')).focus();
+  (canFetch() ? $('#closeSettings') : SHARED_RELAY ? $('#sharedPass') : $('#odptKey')).focus();
 }
 function closeSettings() { $('#gate').classList.remove('show'); $('#openSettings').focus(); }
 $('#openSettings').addEventListener('click', () => openSettings());

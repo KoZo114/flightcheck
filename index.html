@@ -86,18 +86,18 @@
 <div class="gate" id="gate" role="dialog" aria-modal="true" aria-labelledby="gateTitle">
   <form id="gateForm">
     <h2 id="gateTitle">設定</h2>
-    <p>ODPTのアクセストークンか、教えてもらったパスワードを入れてください。どちらもこの端末のブラウザにだけ保存され、GitHubには送られません。</p>
-    <div class="field">
-      <label for="odptKey">ODPT アクセストークン</label>
-      <input id="odptKey" type="password" autocomplete="off" spellcheck="false">
-    </div>
+    <p>教えてもらったパスワードを入れてください。この端末のブラウザにだけ保存されます。</p>
     <div class="field" id="passField">
-      <label for="sharedPass">パスワード（トークンを持っていない人）</label>
+      <label for="sharedPass">パスワード</label>
       <input id="sharedPass" type="password" autocomplete="off" spellcheck="false">
-      <p class="hint">このアプリを教えてくれた人から聞いたパスワードを入れてください。</p>
     </div>
     <details id="advanced">
       <summary>詳細設定</summary>
+      <div class="field">
+        <label for="odptKey">ODPT アクセストークン（持っている人だけ）</label>
+        <input id="odptKey" type="password" autocomplete="off" spellcheck="false">
+        <p class="hint">入れると、パスワードの代わりにこのトークンで ODPT に直接つなぎます。この端末のブラウザにだけ保存され、GitHubには送られません。</p>
+      </div>
       <div class="field">
         <label for="relayUrl">中継URL（ブラウザから直接つながらない場合だけ）</label>
         <input id="relayUrl" type="url" inputmode="url" placeholder="https://flightcheck-relay.〇〇.workers.dev" spellcheck="false">
